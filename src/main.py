@@ -11,11 +11,12 @@ from configs import configure_argument_parser, configure_logging
 from constants import (BASE_DIR, DOWNLOADS, DOWNLOADS_DIR, EXPECTED_STATUS,
                        MAIN_DOC_URL, MAIN_PEP_URL)
 from outputs import control_output
-from utils import find_tag, get_response, get_soup
+from exceptions import ParserFindDocURLsException
+from utils import find_tag, get_response, get_soup, NO_CONTENT_LOG_ERROR
 
 DOWNLOAD_LOG_INFO = 'Архив был загружен и сохранён: {archive_path}'
 START_LOG_INFO = 'Парсер запущен!'
-
+URLS_NOT_FOUND_LOG_ERROR = 'Не найдены ссылки на документацию на странице {url}'
 
 def whats_new(session):
     whats_new_url = urljoin(MAIN_DOC_URL, 'whatsnew/')
@@ -42,11 +43,16 @@ def whats_new(session):
         version_a_tag = section.find('a')
         href = version_a_tag['href']
         version_link = urljoin(whats_new_url, href)
-        soup = get_soup(session, version_link)
-        # response = get_response(session, version_link)
-        # if response is None:
-        #     continue
-        # soup_href = BeautifulSoup(response.text, features='lxml')
+
+        response = get_response(session, version_link)
+        if response is None:
+        # Если страница не загрузится, программа перейдёт к следующей ссылке.
+            logging.info(
+                NO_CONTENT_LOG_ERROR.format(url=version_link)
+            )
+            continue
+        soup = BeautifulSoup(response.text, features='lxml')
+        # soup = get_soup(session, version_link)
 
         h1 = find_tag(soup, 'h1')
         dl = find_tag(soup, 'dl')
@@ -79,7 +85,13 @@ def latest_versions(session):
             a_tags = ul.find_all('a')
             break
     else:
-        raise Exception('Ничего не нашлось')
+        # logging.error(
+        #     URLS_NOT_FOUND_LOG_ERROR.format(url=MAIN_DOC_URL),
+        #     stack_info=True
+        # )
+        raise ParserFindDocURLsException(
+            URLS_NOT_FOUND_LOG_ERROR.format(url=MAIN_DOC_URL)
+        )
 
     for a_tag in a_tags:
         text_match = re.search(pattern, a_tag.text)
@@ -170,14 +182,14 @@ def pep(session):
 
             # def status_comparison(url, page_status, table_status):
             if status_on_exact_page not in EXPECTED_STATUS[status_in_table]:
-                error_msg = f"""
+                error_massage = f"""
                         Несовпадающие статусы:
                         {pep_url}
                         Статус в карточке: {status_on_exact_page}
                         Ожидаемые статусы: {EXPECTED_STATUS[status_in_table]}
                         """
                 logging.warning(
-                    error_msg, stack_info=True
+                    error_massage, stack_info=True
                 )
 
     results.extend(
@@ -200,21 +212,25 @@ MODE_TO_FUNCTION = {
 
 def main():
     configure_logging()
+    logger = logging.getLogger(__name__)
     logging.info(
         START_LOG_INFO
     )
+    try:
+        arg_parser = configure_argument_parser(MODE_TO_FUNCTION.keys())
+        args = arg_parser.parse_args()
 
-    arg_parser = configure_argument_parser(MODE_TO_FUNCTION.keys())
-    args = arg_parser.parse_args()
+        session = requests_cache.CachedSession()
+        if args.clear_cache:
+            session.cache.clear()
 
-    session = requests_cache.CachedSession()
-    if args.clear_cache:
-        session.cache.clear()
+        parser_mode = args.mode
+        results = MODE_TO_FUNCTION[parser_mode](session)
+        if results is not None:
+            control_output(results, args)
 
-    parser_mode = args.mode
-    results = MODE_TO_FUNCTION[parser_mode](session)
-    if results is not None:
-        control_output(results, args)
+    except Exception as error:
+        logger.error(error)
 
 
 if __name__ == '__main__':
