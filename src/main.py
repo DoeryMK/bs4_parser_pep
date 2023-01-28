@@ -1,5 +1,6 @@
 import logging
 import re
+from collections import defaultdict
 from urllib.parse import urljoin
 
 import requests_cache
@@ -7,9 +8,10 @@ from bs4 import BeautifulSoup
 from tqdm import tqdm
 
 from configs import configure_argument_parser, configure_logging
-from constants import BASE_DIR, MAIN_DOC_URL, MAIN_PEP_URL
+from constants import (BASE_DIR, DOWNLOADS_DIR, EXPECTED_STATUS, MAIN_DOC_URL,
+                       MAIN_PEP_URL, DOWNLOADS)
 from outputs import control_output
-from utils import find_tag, get_response, status_comparison
+from utils import find_tag, get_response
 
 
 def whats_new(session):
@@ -76,12 +78,12 @@ def latest_versions(session):
         raise Exception('Ничего не нашлось')
 
     for a_tag in a_tags:
-        link = a_tag['href']
+        # link = a_tag['href']
         text_match = re.search(pattern, a_tag.text)
         version = text_match.group(1) if text_match else a_tag.text
         status = text_match.group(2) if text_match else ''
         results.append(
-            (link, version, status)
+            (a_tag['href'], version, status)
         )
 
     return results
@@ -108,7 +110,12 @@ def download(session):
     archive_url = urljoin(downloads_url, pdf_a4_link)
     filename = archive_url.split('/')[-1]
 
-    downloads_dir = BASE_DIR / 'downloads'
+    # downloads_dir = BASE_DIR / 'downloads'
+    # downloads_dir.mkdir(exist_ok=True)
+    # archive_path = downloads_dir / filename
+    # ДЛЯ ТЕСТОВ ЯП
+    # А ДОЛЖНА БЫТЬ ОДНА КОНСТАНТА DOWNLOADS_DIR
+    downloads_dir = BASE_DIR / DOWNLOADS
     downloads_dir.mkdir(exist_ok=True)
     archive_path = downloads_dir / filename
 
@@ -127,8 +134,8 @@ def pep(session):
 
     soup = BeautifulSoup(response.text, features='lxml')
     tbody_tags = soup.find(id='pep-content').find_all('tbody')
-    pep_count = 0
-    pep_statuses_dict = {}
+    # pep_count = 0
+    pep_statuses_dict = defaultdict(int)
     results = [
         ('Статус', 'Количество')
     ]
@@ -156,22 +163,30 @@ def pep(session):
             status_text_tag = info_table.find(
                 string=re.compile('Status')).parent
             status_on_exact_page = status_text_tag.find_next_sibling().text
+            pep_statuses_dict[status_on_exact_page] += 1
+            # if status_on_exact_page in pep_statuses_dict:
+            #     pep_statuses_dict[status_on_exact_page] += 1
+            # else:
+            #     pep_statuses_dict[status_on_exact_page] = 1
+            # pep_count += 1
 
-            if status_on_exact_page in pep_statuses_dict:
-                pep_statuses_dict[status_on_exact_page] += 1
-            else:
-                pep_statuses_dict[status_on_exact_page] = 1
-            pep_count += 1
-
-            status_comparison(
-                pep_url, status_on_exact_page, status_in_table
-            )
+            # def status_comparison(url, page_status, table_status):
+            if status_on_exact_page not in EXPECTED_STATUS[status_in_table]:
+                error_msg = f"""
+                        Несовпадающие статусы:
+                        {pep_url}
+                        Статус в карточке: {status_on_exact_page}
+                        Ожидаемые статусы: {EXPECTED_STATUS[status_in_table]}
+                        """
+                logging.warning(
+                    error_msg, stack_info=True
+                )
 
     results.extend(
         pep_statuses_dict.items()
     )
     results.append(
-        ('Общее количество PEP', pep_count)
+        ('Общее количество PEP', sum(pep_statuses_dict.values()))
     )
 
     return results

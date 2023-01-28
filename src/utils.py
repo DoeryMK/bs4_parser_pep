@@ -2,7 +2,6 @@ import logging
 
 from requests import RequestException
 
-from constants import EXPECTED_STATUS
 from exceptions import ParserFindTagException
 
 
@@ -28,15 +27,3 @@ def find_tag(soup, tag, attrs=None):
         raise ParserFindTagException(error_msg)
     return searched_tag
 
-
-def status_comparison(url, page_status, table_status):
-    if page_status not in EXPECTED_STATUS[table_status]:
-        error_msg = f"""
-                Несовпадающие статусы:
-                {url}
-                Статус в карточке: {page_status}
-                Ожидаемые статусы: {EXPECTED_STATUS[table_status]}
-                """
-        logging.warning(
-            error_msg, stack_info=True
-        )
