@@ -5,7 +5,9 @@ import logging
 from prettytable import PrettyTable
 
 from constants import (BASE_DIR, CONF_OUTPUT_FILE, CONF_OUTPUT_PRETTY,
-                       DATETIME_FORMAT, RESULTS_DIR, RESULTS)
+                       DATETIME_FORMAT, RESULTS)
+
+FILE_OUTPUT_LOG_INFO = 'Файл с результатами был сохранён: {file_path}'
 
 
 def default_output(*args):
@@ -25,25 +27,21 @@ def pretty_output(*args):
 
 def file_output(*args):
     results, cli_args = args
-
-    # results_dir = BASE_DIR / 'results'
-    # results_dir.mkdir(exist_ok=True)
-    # ДЛЯ ТЕСТОВ ЯП
-    # А ДОЛЖНА БЫТЬ ОДНА КОНСТАНТА RESULTS_DIR
+    # BASE_DIR / RESULTS - ДЛЯ ТЕСТОВ ЯП
+    # А ДОЛЖНА БЫТЬ ОДНА КОНСТАНТА - RESULTS_DIR
     results_dir = BASE_DIR / RESULTS
     results_dir.mkdir(exist_ok=True)
-
     parser_mode = cli_args.mode
     now = dt.datetime.now()
     now_formatted = now.strftime(DATETIME_FORMAT)
     file_name = f'{parser_mode}_{now_formatted}.csv'
     file_path = results_dir / file_name
-
     with open(file_path, 'w', encoding='utf-8') as f:
-        writer = csv.writer(f, dialect='unix')
+        writer = csv.writer(f, dialect=csv.unix_dialect)
         writer.writerows(results)
-
-    logging.info(f'Файл с результатами был сохранён: {file_path}')
+    logging.info(
+        FILE_OUTPUT_LOG_INFO.format(file_path=file_path)
+    )
 
 
 OUTPUT_ACTIONS = {
@@ -58,10 +56,3 @@ def control_output(results, cli_args):
         default_output
     )
     output_action(results, cli_args)
-
-    # if output == 'pretty':
-    #     pretty_output(results)
-    # elif output == 'file':
-    #     file_output(results, cli_args)
-    # else:
-    #     default_output(results)

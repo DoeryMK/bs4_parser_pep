@@ -26,25 +26,29 @@ def configure_argument_parser(available_modes):
     parser.add_argument(
         '-o',
         '--output',
-        choices=(CONF_OUTPUT_PRETTY, CONF_OUTPUT_FILE),
+        choices=(
+            CONF_OUTPUT_PRETTY,
+            CONF_OUTPUT_FILE
+        ),
         help='Дополнительные способы вывода данных'
     )
     return parser
 
 
 def configure_logging():
-    # log_dir = BASE_DIR / 'logs'
-    # log_file = LOG_DIR / 'parser.log'
     LOG_DIR.mkdir(exist_ok=True)
-
     rotating_handler = RotatingFileHandler(
-        LOG_FILE, maxBytes=10 ** 6, backupCount=5, encoding='utf-8'
+        LOG_FILE,
+        maxBytes=10 ** 6,
+        backupCount=5,
+        encoding='utf-8'
     )
     logging.basicConfig(
         datefmt=DT_FORMAT,
         format=LOG_FORMAT,
         level=logging.INFO,
         handlers=(
-            rotating_handler, logging.StreamHandler()
+            rotating_handler,
+            logging.StreamHandler()
         )
     )

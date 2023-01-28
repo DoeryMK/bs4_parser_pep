@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 EXPECTED_STATUS = {
     'A': ('Active', 'Accepted'),
     'D': ('Deferred',),
