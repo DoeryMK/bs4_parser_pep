@@ -12,7 +12,7 @@ from constants import (BASE_DIR, DOWNLOADS, EXPECTED_STATUS, MAIN_DOC_URL,
                        MAIN_PEP_URL)
 from exceptions import ParserFindDocURLsException
 from outputs import control_output
-from utils import find_tag, get_soup
+from utils import find_tag, get_soup, select_elements
 
 DOWNLOAD_LOG_INFO = 'Архив был загружен и сохранён: {archive_path}'
 START_LOG_INFO = 'Парсер запущен!'
@@ -24,23 +24,18 @@ URLS_NOT_FOUND_LOG_ERROR = ('Не найдены ссылки на докуме�
 def whats_new(session):
     whats_new_url = urljoin(MAIN_DOC_URL, 'whatsnew/')
     soup = get_soup(session, whats_new_url)
-
-    main_div = find_tag(
-        soup, 'section', attrs={'id': 'what-s-new-in-python'}
+    sections_by_python = select_elements(
+        soup,
+        '#what-s-new-in-python li.toctree-l1 > a'
     )
-    div_with_ul = find_tag(
-        main_div, 'div', attrs={'class': 'toctree-wrapper'}
-    )
-    sections_by_python = div_with_ul.find_all(
-        'li', attrs={'class': 'toctree-l1'}
-    )
-
+    pattern = r'What’s New.+ (?P<version>\d\.\d+)'
+    hrefs = [
+        link['href'] for link in sections_by_python if
+        re.match(pattern, link.text)]
     results = [
         ('Ссылка на статью', 'Заголовок', 'Редактор, Автор')
     ]
-    for section in tqdm(sections_by_python):
-        version_a_tag = section.find('a')
-        href = version_a_tag['href']
+    for href in hrefs:
         version_link = urljoin(whats_new_url, href)
         try:
             soup = get_soup(session, version_link)
@@ -84,16 +79,11 @@ def latest_versions(session):
 def download(session):
     downloads_url = urljoin(MAIN_DOC_URL, 'download.html')
     soup = get_soup(session, downloads_url)
-    main_tag = find_tag(
-        soup, 'div', {'role': 'main'}
-    )
-    table_tag = find_tag(
-        main_tag, 'table', {'class': 'docutils'}
-    )
-    pdf_a4_tag = find_tag(
-        table_tag, 'a', {'href': re.compile(r'.+pdf-a4\.zip$')}
-    )
-    pdf_a4_link = pdf_a4_tag['href']
+    pdf_a4_link = select_elements(
+        soup,
+        'table.docutils a[href$="pdf-a4.zip"]',
+        single_tag=True
+    )['href']
     archive_url = urljoin(downloads_url, pdf_a4_link)
     filename = archive_url.split('/')[-1]
     # BASE_DIR / DOWNLOADS - ДЛЯ ТЕСТОВ ЯП
