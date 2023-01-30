@@ -14,9 +14,9 @@ EXPECTED_STATUS = {
 
 DATETIME_FORMAT = '%Y-%m-%d_%H-%M-%S'
 
-
-CONF_OUTPUT_FILE = 'file'
-CONF_OUTPUT_PRETTY = 'pretty'
+OUTPUT_FORMAT_DEFAULT = None
+OUTPUT_FORMAT_FILE = 'file'
+OUTPUT_FORMAT_PRETTY = 'pretty'
 
 
 BASE_DIR = Path(__file__).parent
