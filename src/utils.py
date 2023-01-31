@@ -1,5 +1,3 @@
-import logging
-
 from bs4 import BeautifulSoup
 from requests import RequestException
 
@@ -16,12 +14,12 @@ class DelayedLogger:
     def __init__(self):
         self.__messages = []
 
-    def add_massage(self, message):
+    def add_message(self, message):
         self.__messages.append(message)
 
-    def log(self):
-        for error_massage in self.__messages:
-            logging.warning(error_massage)
+    def log(self, logger):
+        for error_message in self.__messages:
+            logger(error_message)
 
 
 def get_response(session, url):
@@ -35,11 +33,10 @@ def get_response(session, url):
         )
 
 
-def get_soup(session, url):
-    response = get_response(session, url)
+def get_soup(session, url, features=None):
     return BeautifulSoup(
-        response.text,
-        features='lxml'
+        get_response(session, url).text,
+        features=features
     )
 
 
@@ -58,7 +55,7 @@ def select_elements(soup, expression, single_tag=False):
     selected = (
         soup.select_one(expression) if single_tag else soup.select(expression)
     )
-    if soup.select_one(expression) is None:
+    if not selected:
         raise ParserFindTagException(
             ELEMENTS_NOT_FOUND_LOG_ERROR.format(expression=expression)
         )

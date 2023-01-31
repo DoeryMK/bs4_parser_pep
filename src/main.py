@@ -4,7 +4,6 @@ from collections import defaultdict
 from urllib.parse import urljoin
 
 import requests_cache
-from requests import RequestException
 from tqdm import tqdm
 
 from configs import configure_argument_parser, configure_logging
@@ -21,14 +20,10 @@ FINISH_LOG_INFO = 'Работа парсера завершена'
 URLS_NOT_FOUND_LOG_ERROR = ('Не найдены ссылки на документацию '
                             'на странице {url}')
 
-delayed_logger = DelayedLogger()
-
 
 def whats_new(session):
     sections_by_python = select_elements(
-        get_soup(
-            session, urljoin(MAIN_DOC_URL, 'whatsnew/')
-        ),
+        get_soup(session, urljoin(MAIN_DOC_URL, 'whatsnew/'), 'lxml'),
         '#what-s-new-in-python li.toctree-l1 > a'
     )
     pattern = r'What’s New.+ (?P<version>\d\.\d+)'
@@ -39,15 +34,16 @@ def whats_new(session):
     results = [
         ('Ссылка на статью', 'Заголовок', 'Редактор, Автор')
     ]
+    delayed_logger = DelayedLogger()
     for href in tqdm(hrefs):
         version_link = urljoin(
             urljoin(MAIN_DOC_URL, 'whatsnew/'),
             href
         )
         try:
-            soup = get_soup(session, version_link)
-        except RequestException:
-            delayed_logger.add_massage(
+            soup = get_soup(session, version_link, 'lxml')
+        except ConnectionError:
+            delayed_logger.add_message(
                 GET_RESPONSE_LOG_ERROR.format(url=version_link)
             )
             continue
@@ -57,6 +53,7 @@ def whats_new(session):
         results.append(
             (version_link, h1.text, dl_text)
         )
+    delayed_logger.log(logging.warning)
     return results
 
 
@@ -66,8 +63,8 @@ def latest_versions(session):
         ('Ссылка на документацию', 'Версия', 'Статус')
     ]
     for ul in find_tag(
-            get_soup(session, MAIN_DOC_URL),
-            'div', {'class': 'sphinxsidebarwrapper'}
+        get_soup(session, MAIN_DOC_URL, 'lxml'),
+        'div', {'class': 'sphinxsidebarwrapper'}
     ).find_all('ul'):
         if 'All versions' in ul.text:
             a_tags = ul.find_all('a')
@@ -94,7 +91,7 @@ def download(session):
     archive_url = urljoin(
         downloads_url,
         select_elements(
-            get_soup(session, downloads_url),
+            get_soup(session, downloads_url, 'lxml'),
             'table.docutils a[href$="pdf-a4.zip"]',
             single_tag=True
         )['href']
@@ -102,7 +99,7 @@ def download(session):
     filename = archive_url.split('/')[-1]
     # BASE_DIR / DOWNLOADS - ДЛЯ ТЕСТОВ ЯП
     # А ДОЛЖНА БЫТЬ ОДНА КОНСТАНТА - DOWNLOADS_DIR
-    downloads_dir = BASE_DIR / DOWNLOADS
+    downloads_dir = BASE_DIR / 'downloads'
     downloads_dir.mkdir(exist_ok=True)
     archive_path = downloads_dir / filename
     response = session.get(archive_url)
@@ -115,12 +112,12 @@ def download(session):
 
 def pep(session):
     pep_statuses_dict = defaultdict(int)
+    delayed_logger = DelayedLogger()
     for tbody in tqdm(
-            get_soup(
-                session, MAIN_PEP_URL
-            ).find(
-                id='pep-content'
-            ).find_all('tbody')):
+        get_soup(session, MAIN_PEP_URL, 'lxml').find(
+            id='pep-content'
+        ).find_all('tbody')
+    ):
         abbr_tags = tbody.find_all('abbr')
         for abbr in abbr_tags:
             status_in_table = abbr.text[1:]
@@ -128,9 +125,9 @@ def pep(session):
             pep_link = find_tag(next_td, 'a').get('href')
             pep_url = urljoin(MAIN_PEP_URL, pep_link)
             try:
-                soup = get_soup(session, pep_url)
-            except RequestException:
-                delayed_logger.add_massage(
+                soup = get_soup(session, pep_url, 'lxml')
+            except ConnectionError:
+                delayed_logger.add_message(
                     GET_RESPONSE_LOG_ERROR.format(url=pep_url)
                 )
                 continue
@@ -146,10 +143,12 @@ def pep(session):
             status_on_exact_page = status_text_tag.find_next_sibling().text
             pep_statuses_dict[status_on_exact_page] += 1
             if status_on_exact_page not in EXPECTED_STATUS[status_in_table]:
-                error_massage = f"""Несовпадающие статусы:
-                        {pep_url}
-                        Статус в карточке: {status_on_exact_page}"""
-                delayed_logger.add_massage(error_massage)
+                delayed_logger.add_message(
+                    f"""Несовпадающие статусы:
+                    {pep_url}
+                    Статус в карточке: {status_on_exact_page}"""
+                )
+    delayed_logger.log(logging.warning)
     return [
         ('Статус', 'Количество'),
         *pep_statuses_dict.items(),
@@ -180,8 +179,9 @@ def main():
         if results is not None:
             control_output(results, args)
     except Exception as error:
-        logger.error(error, exc_info=True)
-    delayed_logger.log()
+        logger.exception(
+            f'Ошибка в работе парсера: {error}'
+        )
     logger.info(FINISH_LOG_INFO)
 
 
