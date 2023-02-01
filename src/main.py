@@ -19,11 +19,12 @@ START_LOG_INFO = 'Парсер запущен!'
 FINISH_LOG_INFO = 'Работа парсера завершена'
 URLS_NOT_FOUND_LOG_ERROR = ('Не найдены ссылки на документацию '
                             'на странице {url}')
+GENERALISED_LOG_ERROR = 'Ошибка в работе парсера: {error}'
 
 
 def whats_new(session):
     sections_by_python = select_elements(
-        get_soup(session, urljoin(MAIN_DOC_URL, 'whatsnew/'), 'lxml'),
+        get_soup(session, urljoin(MAIN_DOC_URL, 'whatsnew/')),
         '#what-s-new-in-python li.toctree-l1 > a'
     )
     pattern = r'What’s New.+ (?P<version>\d\.\d+)'
@@ -41,7 +42,7 @@ def whats_new(session):
             href
         )
         try:
-            soup = get_soup(session, version_link, 'lxml')
+            soup = get_soup(session, version_link)
         except ConnectionError:
             delayed_logger.add_message(
                 GET_RESPONSE_LOG_ERROR.format(url=version_link)
@@ -63,7 +64,7 @@ def latest_versions(session):
         ('Ссылка на документацию', 'Версия', 'Статус')
     ]
     for ul in find_tag(
-        get_soup(session, MAIN_DOC_URL, 'lxml'),
+        get_soup(session, MAIN_DOC_URL),
         'div', {'class': 'sphinxsidebarwrapper'}
     ).find_all('ul'):
         if 'All versions' in ul.text:
@@ -91,7 +92,7 @@ def download(session):
     archive_url = urljoin(
         downloads_url,
         select_elements(
-            get_soup(session, downloads_url, 'lxml'),
+            get_soup(session, downloads_url),
             'table.docutils a[href$="pdf-a4.zip"]',
             single_tag=True
         )['href']
@@ -114,7 +115,7 @@ def pep(session):
     pep_statuses_dict = defaultdict(int)
     delayed_logger = DelayedLogger()
     for tbody in tqdm(
-        get_soup(session, MAIN_PEP_URL, 'lxml').find(
+        get_soup(session, MAIN_PEP_URL).find(
             id='pep-content'
         ).find_all('tbody')
     ):
@@ -125,7 +126,7 @@ def pep(session):
             pep_link = find_tag(next_td, 'a').get('href')
             pep_url = urljoin(MAIN_PEP_URL, pep_link)
             try:
-                soup = get_soup(session, pep_url, 'lxml')
+                soup = get_soup(session, pep_url)
             except ConnectionError:
                 delayed_logger.add_message(
                     GET_RESPONSE_LOG_ERROR.format(url=pep_url)
@@ -144,9 +145,9 @@ def pep(session):
             pep_statuses_dict[status_on_exact_page] += 1
             if status_on_exact_page not in EXPECTED_STATUS[status_in_table]:
                 delayed_logger.add_message(
-                    f"""Несовпадающие статусы:
-                    {pep_url}
-                    Статус в карточке: {status_on_exact_page}"""
+                    f'Несовпадающие статусы: '
+                    f'{pep_url} '
+                    f'Статус в карточке: {status_on_exact_page}'
                 )
     delayed_logger.log(logging.warning)
     return [
@@ -180,7 +181,7 @@ def main():
             control_output(results, args)
     except Exception as error:
         logger.exception(
-            f'Ошибка в работе парсера: {error}'
+            GENERALISED_LOG_ERROR.format(error=error)
         )
     logger.info(FINISH_LOG_INFO)
 

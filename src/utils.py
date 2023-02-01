@@ -33,7 +33,7 @@ def get_response(session, url):
         )
 
 
-def get_soup(session, url, features=None):
+def get_soup(session, url, features='lxml'):
     return BeautifulSoup(
         get_response(session, url).text,
         features=features
